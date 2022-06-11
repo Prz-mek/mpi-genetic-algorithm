@@ -1,6 +1,7 @@
-# imports
+from mpi4py import MPI
 import numpy as np
 import random
+import itertools
 import matplotlib.pyplot as plt
 
 def readFile(name):
@@ -139,24 +140,95 @@ class KnapsackProblemPolulation:
     def get_all_results(self):
         return self.population
 
+    def __iter__(self):
+        for ind in self.population:
+            yield ind
+
 def genetic_main():
-    s = 15
-    ch_len = 7
-    w = np.transpose(np.asarray([12, 1, 4, 1, 2, 14, 1]))
-    c = np.transpose(np.asarray([4, 2, 10, 1, 2, 16, 5]))
+    comm = MPI.COMM_WORLD
+    rank = comm.Get_rank()
+    nprocs = comm.Get_size()
 
-    s, ch_len, w, c = readFile("data/data_big")
-    problem = KnapsackProblem(s, w, c)
+    iter = 25
+    t_iter = 5
+    crossover_prob=0.4
+    mutation_prob=0.03
+    size=10
 
-    population = KnapsackProblemPolulation(ch_len, problem, RouletteSelection())
-    best_inds = []
-    for i in range(100):
-        population.crossover()
-        population.mutate()
-        best_inds.append(population.get_best().get_fitness())
-        population.select(70)
+    if rank == 0:
+      s = 5000
+      chromoseome_length = 70
+      w = np.transpose(np.random.randint(1, 100, chromoseome_length))
+      c = np.transpose(np.random.randint(1, 200, chromoseome_length))
+      problem = KnapsackProblem(s, w, c)
+    else:
+        s = 0
+        chromoseome_length = 0
+        w = None
+        c = None
+        problem = None
 
-    plt.plot([i for i in range(100)], best_inds)
-    plt.show()
+
+    selection = RouletteSelection()
+    s = comm.bcast(s, root=0)
+    chromoseome_length = comm.bcast(chromoseome_length, root=0)
+    w = comm.bcast(w, root=0)
+    c = comm.bcast(c, root=0)
+    problem = comm.bcast(problem, root=0)
+
+    population = []
+    for _ in range(size):
+        individual = KnapsackProblemIndividual(chromoseome_length, problem)
+        individual.random()
+        population.append(individual)
+
+    if rank == 0:
+        population = []
+        for _ in range(size):
+            individual = KnapsackProblemIndividual(chromoseome_length, problem)
+            individual.random()
+            population.append(individual)
+            
+        ave, res = divmod(size, nprocs)
+        counts = [ave + 1 if p < res else ave for p in range(nprocs)]
+
+        starts = [sum(counts[:p]) for p in range(nprocs)]
+        ends = [sum(counts[:p+1]) for p in range(nprocs)]
+        population = [population[starts[p]:ends[p]] for p in range(nprocs)]
+    else:
+        population = None
+    
+    population = comm.scatter(population, root=0)
+
+    # best_inds = []
+    for i in range(iter):
+        # crossover
+        n = len(population)
+        for i in range(n):
+            for j in range(i+1,n):
+                val = random.random()
+                if val < crossover_prob:
+                    population.append(population[i].crossover(population[j]))
+        #mutation
+        for i in range(n):
+            val = random.random()
+            if val < crossover_prob:
+                population.append(population[i].mutate())
+        
+        # get best in iteration
+        # best = population[0]
+        # for ind in population[1:]:
+        #     if best.get_fitness() < ind.get_fitness():
+        #         best = ind
+        # best_inds.append(best.get_fitness())
+        if i + 1 % t_iter == 0:
+            population = comm.gather(population, root=0)
+            if rank == 0:
+                population = list(itertools.chain(l1, l2, l3))
+                population = selection.select(population, size)
+                population = [population[starts[p]:ends[p]] for p in range(nprocs)]
+            population = comm.scatter(population, root=0)
+        else:
+            population = selection.select(population, size)
 
 genetic_main()
