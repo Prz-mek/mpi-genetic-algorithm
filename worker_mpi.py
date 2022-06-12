@@ -100,60 +100,29 @@ class RouletteSelection(Selection):
 
         return new_population
                     
-class KnapsackProblemPolulation:
-    def __init__(self, chromoseome_length, problem, selection, crossover_prob=0.4, mutation_prob=0.03, size=100):
-        self.crossover_prob = crossover_prob
-        self.mutation_prob = mutation_prob
-        self.selection = selection
-        self.population = []
-        for _ in range(size):
-            individual = KnapsackProblemIndividual(chromoseome_length, problem)
-            individual.random()
-            self.population.append(individual)
+def get_best(population):
+    best = population[0]
+    for ind in population:
+        if best.get_fitness() < ind.get_fitness():
+            best = ind
+    return best
 
-    def crossover(self):
-        n = len(self.population)
-        for i in range(n):
-            for j in range(i+1,n):
-                val = random.random()
-                if val < self.crossover_prob:
-                    self.population.append(self.population[i].crossover(self.population[j]))
-
-    def mutate(self):
-        n = len(self.population)
-        for i in range(n):
-            val = random.random()
-            if val < self.crossover_prob:
-                self.population.append(self.population[i].mutate())
-
-    def select(self, num):
-        self.population = self.selection.select(self.population, num)
-
-
-    def get_best(self):
-        best = self.population[0]
-        for ind in self.population:
-            if best.get_fitness() < ind.get_fitness():
-                best = ind
-        return best
-
-    def get_all_results(self):
-        return self.population
-
-    def __iter__(self):
-        for ind in self.population:
-            yield ind
+def merge_part_populations(population):
+    new_population = []
+    for p in population:
+        new_population += p
+    return new_population
 
 def genetic_main():
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     nprocs = comm.Get_size()
 
-    iter = 25
+    iter = 100
     t_iter = 5
     crossover_prob=0.4
     mutation_prob=0.03
-    size=10
+    size=400
 
     if rank == 0:
       s = 5000
@@ -176,12 +145,6 @@ def genetic_main():
     c = comm.bcast(c, root=0)
     problem = comm.bcast(problem, root=0)
 
-    population = []
-    for _ in range(size):
-        individual = KnapsackProblemIndividual(chromoseome_length, problem)
-        individual.random()
-        population.append(individual)
-
     if rank == 0:
         population = []
         for _ in range(size):
@@ -195,12 +158,12 @@ def genetic_main():
         starts = [sum(counts[:p]) for p in range(nprocs)]
         ends = [sum(counts[:p+1]) for p in range(nprocs)]
         population = [population[starts[p]:ends[p]] for p in range(nprocs)]
+        best_inds = []
     else:
         population = None
     
     population = comm.scatter(population, root=0)
 
-    # best_inds = []
     for i in range(iter):
         # crossover
         n = len(population)
@@ -215,20 +178,23 @@ def genetic_main():
             if val < crossover_prob:
                 population.append(population[i].mutate())
         
-        # get best in iteration
-        # best = population[0]
-        # for ind in population[1:]:
-        #     if best.get_fitness() < ind.get_fitness():
-        #         best = ind
-        # best_inds.append(best.get_fitness())
-        if i + 1 % t_iter == 0:
+        #selection
+        if (i + 1) % t_iter == 0:
             population = comm.gather(population, root=0)
             if rank == 0:
-                population = list(itertools.chain(l1, l2, l3))
+                population =  merge_part_populations(population)
+                best_inds.append(get_best(population).get_fitness())
                 population = selection.select(population, size)
                 population = [population[starts[p]:ends[p]] for p in range(nprocs)]
             population = comm.scatter(population, root=0)
         else:
             population = selection.select(population, size)
+
+    population = comm.gather(population, root=0)
+    if rank == 0:
+        population = merge_part_populations(population)
+        best_inds.append(get_best(population).get_fitness())
+        print(best_inds)
+
 
 genetic_main()
