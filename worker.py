@@ -140,23 +140,20 @@ class KnapsackProblemPolulation:
         return self.population
 
 def genetic_main():
-    s = 15
-    ch_len = 7
-    w = np.transpose(np.asarray([12, 1, 4, 1, 2, 14, 1]))
-    c = np.transpose(np.asarray([4, 2, 10, 1, 2, 16, 5]))
-
+    size = 200
+    iter = 100
     s, ch_len, w, c = readFile("data/data_big")
     problem = KnapsackProblem(s, w, c)
 
-    population = KnapsackProblemPolulation(ch_len, problem, RouletteSelection())
+    population = KnapsackProblemPolulation(ch_len, problem, RouletteSelection(), size=size)
     best_inds = []
-    for i in range(100):
+    for i in range(iter):
         population.crossover()
         population.mutate()
         best_inds.append(population.get_best().get_fitness())
-        population.select(70)
+        population.select(size)
 
-    plt.plot([i for i in range(100)], best_inds)
+    plt.plot([i for i in range(iter)], best_inds)
     plt.show()
 
 genetic_main()

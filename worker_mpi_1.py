@@ -122,14 +122,11 @@ def genetic_main():
     t_iter = 5
     crossover_prob=0.4
     mutation_prob=0.03
-    size=400
+    size=200
 
     if rank == 0:
-      s = 5000
-      chromoseome_length = 70
-      w = np.transpose(np.random.randint(1, 100, chromoseome_length))
-      c = np.transpose(np.random.randint(1, 200, chromoseome_length))
-      problem = KnapsackProblem(s, w, c)
+        s, chromoseome_length, w, c = readFile("data/data_big")
+        problem = KnapsackProblem(s, w, c)
     else:
         s = 0
         chromoseome_length = 0
@@ -175,7 +172,7 @@ def genetic_main():
         #mutation
         for i in range(n):
             val = random.random()
-            if val < crossover_prob:
+            if val < mutation_prob:
                 population.append(population[i].mutate())
         
         #selection
@@ -194,7 +191,8 @@ def genetic_main():
     if rank == 0:
         population = merge_part_populations(population)
         best_inds.append(get_best(population).get_fitness())
-        print(best_inds)
+        plt.plot([i  for i in range(len(best_inds))], best_inds)
+        plt.show()
 
 
 genetic_main()
