@@ -122,9 +122,10 @@ def genetic_main():
     t_iter = 5
     crossover_prob=0.4
     mutation_prob=0.03
-    size=200
+    size = 50
 
     if rank == 0:
+        start = MPI.Wtime()
         s, chromoseome_length, w, c = readFile("data/data_big")
         problem = KnapsackProblem(s, w, c)
     else:
@@ -191,8 +192,11 @@ def genetic_main():
     if rank == 0:
         population = merge_part_populations(population)
         best_inds.append(get_best(population).get_fitness())
+        end = MPI.Wtime()
+        print(end - start)
         plt.plot([i  for i in range(len(best_inds))], best_inds)
+        plt.ylabel("best_inds")
+        plt.xlabel("i")
         plt.show()
-
-
+    
 genetic_main()
