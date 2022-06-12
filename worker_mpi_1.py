@@ -194,5 +194,4 @@ def genetic_main():
         plt.plot([i  for i in range(len(best_inds))], best_inds)
         plt.show()
 
-
 genetic_main()
